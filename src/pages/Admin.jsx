@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../supabaseClient'; // Import Supabase
 
 export function Admin() {
   const { lang } = useLanguage();
@@ -12,16 +13,15 @@ export function Admin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3000/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      if (res.ok) {
+      const { data, error } = await supabase
+        .from('products')
+        .insert([formData]);
+
+      if (error) {
+        setMessage('خطأ في إضافة المنتج / Erreur: ' + error.message);
+      } else {
         setMessage('تم إضافة المنتج بنجاح! / Produit ajouté avec succès!');
         setFormData({ name_ar: '', name_fr: '', description_ar: '', description_fr: '', price: '', category: 'kitchen', image: '' });
-      } else {
-        setMessage('خطأ في إضافة المنتج / Erreur');
       }
     } catch (err) {
       setMessage('تعذر الاتصال بالخادم / Erreur de serveur');

@@ -7,6 +7,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { ProductCard } from './components/ProductCard';
 import { CheckoutModal } from './components/CheckoutModal';
 import { Admin } from './pages/Admin';
+import { supabase } from './supabaseClient'; // Import Supabase
 
 function Store() {
   const { lang, t } = useLanguage();
@@ -21,16 +22,29 @@ function Store() {
   }, [lang]);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/products')
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-        setLoading(false);
-      })
-      .catch(err => {
+    async function fetchProducts() {
+      try {
+        const { data, error } = await supabase.from('products').select('*');
+        if (error) throw error;
+        
+        // Format for frontend based on database columns
+        const formatted = data.map(p => ({
+          id: p.id,
+          name: { ar: p.name_ar, fr: p.name_fr },
+          description: { ar: p.description_ar, fr: p.description_fr },
+          price: p.price,
+          rating: p.rating,
+          category: p.category,
+          image: p.image
+        }));
+        setProducts(formatted);
+      } catch (err) {
         console.error('Failed to fetch products', err);
+      } finally {
         setLoading(false);
-      });
+      }
+    }
+    fetchProducts();
   }, []);
 
   const filteredProducts = useMemo(() => {
