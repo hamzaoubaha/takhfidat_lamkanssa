@@ -27,9 +27,6 @@ export function Header({ searchTerm, setSearchTerm }) {
         </div>
 
         <div className="actions">
-          <Link to="/admin" className="icon-btn" aria-label="Admin">
-            <Shield size={20} />
-          </Link>
           <button className="icon-btn lang-toggle" onClick={toggleLanguage} aria-label="Toggle Language">
             <Globe size={20} />
             <span>{lang === 'ar' ? 'FR' : 'عربي'}</span>

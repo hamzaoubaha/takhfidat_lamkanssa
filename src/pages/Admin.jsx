@@ -4,11 +4,34 @@ import { supabase } from '../supabaseClient'; // Import Supabase
 
 export function Admin() {
   const { lang } = useLanguage();
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    localStorage.getItem('admin_authenticated') === 'true'
+  );
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [formData, setFormData] = useState({
     name_ar: '', name_fr: '', description_ar: '', description_fr: '',
     price: '', category: 'kitchen', image: ''
   });
   const [message, setMessage] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const correctPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+    if (password === correctPassword) {
+      setIsAuthenticated(true);
+      localStorage.setItem('admin_authenticated', 'true');
+      setLoginError('');
+    } else {
+      setLoginError(lang === 'ar' ? 'كلمة المرور غير صحيحة!' : 'Mot de passe incorrect!');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_authenticated');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,10 +51,43 @@ export function Admin() {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="admin-page" style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="admin-container" style={{ maxWidth: '400px', width: '100%', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text-color)' }}>
+            {lang === 'ar' ? 'الدخول للوحة التحكم' : 'Accès Administration'}
+          </h2>
+          {loginError && <div className="alert" style={{ backgroundColor: '#fee2e2', color: '#ef4444', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', textAlign: 'center' }}>{loginError}</div>}
+          <form onSubmit={handleLogin} className="admin-form">
+            <div className="form-group">
+              <label>{lang === 'ar' ? 'كلمة المرور' : 'Mot de passe'}</label>
+              <input 
+                required 
+                type="password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ddd', marginTop: '0.5rem' }}
+              />
+            </div>
+            <button type="submit" className="submit-btn" style={{ width: '100%', padding: '0.75rem', marginTop: '1rem', background: 'var(--primary-color)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+              {lang === 'ar' ? 'دخول' : 'Connexion'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-container">
-        <h2>لوحة التحكم / Panneau d'administration</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <h2>لوحة التحكم / Panneau d'administration</h2>
+          <button onClick={handleLogout} className="submit-btn" style={{ background: '#ef4444', padding: '0.5rem 1rem', width: 'auto', margin: 0 }}>
+            {lang === 'ar' ? 'تسجيل الخروج' : 'Déconnexion'}
+          </button>
+        </div>
         {message && <div className="alert">{message}</div>}
         <form onSubmit={handleSubmit} className="admin-form">
           <div className="form-group">
