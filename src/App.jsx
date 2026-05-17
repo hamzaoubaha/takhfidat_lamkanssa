@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CartProvider } from './context/CartContext';
 import { Header } from './components/Header';
@@ -86,7 +86,7 @@ function Store() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <LanguageProvider>
         <CartProvider>
           <Routes>
@@ -95,7 +95,7 @@ function App() {
           </Routes>
         </CartProvider>
       </LanguageProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
