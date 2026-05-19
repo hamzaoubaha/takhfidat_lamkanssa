@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../supabaseClient'; // Import Supabase
+import { products as mockProducts } from '../data/products'; // Import local mock products
 
 export function Admin() {
   const { lang } = useLanguage();
@@ -29,6 +30,11 @@ export function Admin() {
   const [isEditing, setIsEditing] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
 
+  const isDemoMode = useMemo(() => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    return !url || url.includes('your-project-id') || url === '';
+  }, []);
+
   // Check and Fetch products when authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -39,6 +45,10 @@ export function Admin() {
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
+      if (isDemoMode) {
+        throw new Error('Supabase is not configured (Demo Mode)');
+      }
+
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -47,7 +57,19 @@ export function Admin() {
       if (error) throw error;
       setProducts(data || []);
     } catch (err) {
-      console.error('Failed to fetch products:', err);
+      console.warn('Using local mock products fallback in Admin:', err.message);
+      // Fallback: convert mock products keys if they match database column structure (our mock products already match)
+      setProducts(mockProducts.map(p => ({
+        id: p.id,
+        name_ar: p.name.ar,
+        name_fr: p.name.fr,
+        description_ar: p.description.ar,
+        description_fr: p.description.fr,
+        price: p.price,
+        rating: p.rating,
+        category: p.category,
+        image: p.image
+      })));
     } finally {
       setLoadingProducts(false);
     }
@@ -73,6 +95,15 @@ export function Admin() {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (isDemoMode) {
+      setImageError(
+        lang === 'ar' 
+          ? '⚠️ لا يمكن رفع ملفات الصور في وضع التجربة. يرجى تفعيل Supabase في ملف .env أولاً. يمكنك إدخال رابط صورة خارجي بدلاً من ذلك.' 
+          : '⚠️ L\'upload d\'images est désactivé en Mode Démo. Veuillez configurer Supabase dans le fichier .env. Vous pouvez utiliser un lien URL externe.'
+      );
+      return;
+    }
 
     setUploading(true);
     setImageError('');
@@ -110,8 +141,18 @@ export function Admin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
     setMessage('');
+
+    if (isDemoMode) {
+      setMessage(
+        lang === 'ar'
+          ? '⚠️ عذراً، لا يمكن إضافة أو تعديل المنتجات في وضع التجربة. لتمكين هذه الميزات، يرجى ربط قاعدة بيانات Supabase الخاصة بك عن طريق تهيئة ملف .env في المجلد الرئيسي للمشروع.'
+          : '⚠️ Désolé, l\'ajout ou la modification de produits est désactivée en Mode Démo. Veuillez connecter votre base de données Supabase dans le fichier .env.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
     try {
       if (isEditing) {
         // Update product
@@ -183,6 +224,14 @@ export function Admin() {
       : 'Êtes-vous sûr de vouloir supprimer ce produit définitivement ?';
       
     if (window.confirm(confirmMsg)) {
+      if (isDemoMode) {
+        setMessage(
+          lang === 'ar'
+            ? '⚠️ لا يمكن حذف المنتجات التجريبية في وضع التجربة. يرجى ربط قاعدة بيانات Supabase للتحكم الكامل.'
+            : '⚠️ Impossible de supprimer les produits de démonstration en Mode Démo. Veuillez connecter Supabase.'
+        );
+        return;
+      }
       try {
         const { error } = await supabase
           .from('products')
@@ -260,6 +309,25 @@ export function Admin() {
             {lang === 'ar' ? 'تسجيل الخروج' : 'Déconnexion'}
           </button>
         </div>
+
+        {isDemoMode && (
+          <div className="alert animate-fade-in" style={{
+            background: 'linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%)',
+            color: '#856404',
+            border: '1px solid #ffeeba',
+            padding: '1rem 1.5rem',
+            borderRadius: '12px',
+            marginBottom: '2rem',
+            lineHeight: '1.6'
+          }}>
+            <strong>{lang === 'ar' ? '⚠️ وضع التجربة نشط' : '⚠️ Mode Démo Actif'}</strong>
+            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+              {lang === 'ar' 
+                ? 'لوحة التحكم تعمل حالياً ببيانات تجريبية محلية لأن التطبيق غير متصل بقاعدة بيانات Supabase. عمليات الإضافة، التعديل، والحذف غير مفعلة للحفاظ على سلامة البيانات المحلية. لتفعيل لوحة التحكم بالكامل، يرجى ملء مفاتيح Supabase الخاصة بك في ملف .env الموجود في جذر المشروع ثم إعادة تشغيل خادم التطوير.'
+                : 'Le panneau d\'administration fonctionne actuellement avec des données de démonstration locales car l\'application n\'est pas connectée à Supabase. L\'ajout, la modification et la suppression sont désactivés. Pour activer le panneau, veuillez renseigner vos clés Supabase dans le fichier .env.'}
+            </p>
+          </div>
+        )}
 
         {message && <div className="alert animate-fade-in" style={{ marginBottom: '2rem' }}>{message}</div>}
 
