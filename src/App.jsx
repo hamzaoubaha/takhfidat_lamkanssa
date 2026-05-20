@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { CategoryFilter } from './components/CategoryFilter';
 import { ProductCard } from './components/ProductCard';
 import { CheckoutModal } from './components/CheckoutModal';
+import { ContactButtons } from './components/ContactButtons';
 import { Admin } from './pages/Admin';
 import { supabase } from './supabaseClient'; // Import Supabase
 import { products as mockProducts } from './data/products'; // Import local mock products
@@ -96,6 +97,7 @@ function Store() {
         </div>
       )}
       <CheckoutModal />
+      <ContactButtons />
       
       <main className="main-content">
         <CategoryFilter 

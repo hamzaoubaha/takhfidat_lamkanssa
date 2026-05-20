@@ -12,7 +12,9 @@ const translations = {
     appliances: 'أجهزة كهربائية',
     addToCart: 'أضف إلى السلة',
     currency: 'درهم',
-    noProducts: 'لا توجد منتجات مطابقة'
+    noProducts: 'لا توجد منتجات مطابقة',
+    whatsappContact: 'راسلنا على واتساب',
+    phoneCall: 'اتصل بنا الآن'
   },
   fr: {
     title: 'Takhfidat Lamkanssa',
@@ -23,7 +25,9 @@ const translations = {
     appliances: 'Électroménager',
     addToCart: 'Ajouter au panier',
     currency: 'MAD',
-    noProducts: 'Aucun produit trouvé'
+    noProducts: 'Aucun produit trouvé',
+    whatsappContact: 'Contactez-nous sur WhatsApp',
+    phoneCall: 'Appelez-nous'
   }
 };
 
