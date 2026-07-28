@@ -10,6 +10,7 @@ import { ProductCard } from '../components/ProductCard';
 import { CheckoutModal } from '../components/CheckoutModal';
 import { ContactButtons } from '../components/ContactButtons';
 import { Footer } from '../components/Footer';
+import { Soup } from 'lucide-react';
 
 export function Store() {
   const { lang, t } = useLanguage();
@@ -176,7 +177,9 @@ export function Store() {
           </div>
         ) : (
           <div className="no-products">
-            <span className="no-products-icon">🥣</span>
+            <span className="no-products-icon" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+              <Soup size={48} style={{ color: 'var(--text-light)' }} />
+            </span>
             <h3>{t('noProducts')}</h3>
           </div>
         )}

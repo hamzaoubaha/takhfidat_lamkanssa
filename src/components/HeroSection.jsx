@@ -1,4 +1,5 @@
 import { useLanguage } from '../context/LanguageContext';
+import { Sparkles } from 'lucide-react';
 
 export function HeroSection() {
   const { t } = useLanguage();
@@ -10,7 +11,7 @@ export function HeroSection() {
       <div className="hero-pattern"></div>
       <div className="hero-content">
         <span className="hero-badge">
-          <span>✨</span> {t('bestOffer')}
+          <Sparkles size={14} style={{ color: 'var(--gold)' }} /> {t('bestOffer')}
         </span>
         <h2 className="hero-title">
           {t('heroTitle')}

@@ -3,7 +3,7 @@ import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../supabaseClient';
-import { X, Trash2, Plus, Minus, MessageSquare } from 'lucide-react';
+import { X, Trash2, Plus, Minus, MessageSquare, ShoppingCart, ChefHat } from 'lucide-react';
 
 export function CheckoutModal() {
   const { cart, isCartOpen, toggleCart, removeFromCart, increaseQty, decreaseQty, clearCart, cartTotal } = useCart();
@@ -73,7 +73,7 @@ export function CheckoutModal() {
       <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">
-            <span>🛒</span>
+            <ShoppingCart size={20} style={{ color: 'var(--primary)' }} />
             <h3>{t('cartTitle')}</h3>
             <span className="modal-count">{cart.length}</span>
           </div>
@@ -99,7 +99,9 @@ export function CheckoutModal() {
         
         {cart.length === 0 ? (
           <div className="cart-empty">
-            <span className="cart-empty-icon">🍳</span>
+            <span className="cart-empty-icon" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+              <ChefHat size={48} style={{ color: 'var(--text-light)' }} />
+            </span>
             <h3>{t('cartEmpty')}</h3>
             <p>{t('cartEmptyDesc')}</p>
           </div>
