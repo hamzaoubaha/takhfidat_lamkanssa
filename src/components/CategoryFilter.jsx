@@ -2,12 +2,12 @@ import { useLanguage } from '../context/LanguageContext';
 
 export function CategoryFilter({ selectedCategory, setSelectedCategory }) {
   const { t } = useLanguage();
-  
+
   const categories = [
-    { id: 'all', label: t('all') },
-    { id: 'kitchen', label: t('kitchen') },
-    { id: 'decor', label: t('decor') },
-    { id: 'appliances', label: t('appliances') },
+    { id: 'all', label: t('all'), icon: '✨' },
+    { id: 'kitchen', label: t('kitchen'), icon: '🍲' },
+    { id: 'appliances', label: t('appliances'), icon: '⚡' },
+    { id: 'decor', label: t('decor'), icon: '🏺' }
   ];
 
   return (
@@ -18,7 +18,8 @@ export function CategoryFilter({ selectedCategory, setSelectedCategory }) {
           className={`category-btn ${selectedCategory === cat.id ? 'active' : ''}`}
           onClick={() => setSelectedCategory(cat.id)}
         >
-          {cat.label}
+          <span className="cat-icon">{cat.icon}</span>
+          <span>{cat.label}</span>
         </button>
       ))}
     </div>

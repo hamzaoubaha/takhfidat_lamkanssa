@@ -1,10 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { supabase } from '../supabaseClient'; // Import Supabase
-import { products as mockProducts } from '../data/products'; // Import local mock products
+import { useToast } from '../context/ToastContext';
+import { supabase } from '../supabaseClient';
+import { products as mockProducts } from '../data/products';
+import { Trash2, Edit2, LogOut, Package, ShoppingBag, Eye, CheckCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function Admin() {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
+  const { addToast } = useToast();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders' or 'products'
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem('admin_authenticated') === 'true'
   );
@@ -14,12 +21,14 @@ export function Admin() {
   // Form State
   const [formData, setFormData] = useState({
     name_ar: '', name_fr: '', description_ar: '', description_fr: '',
-    price: '', category: 'kitchen', image: ''
+    price: '', category: 'kitchen', image: '', is_featured: false
   });
   
   // App States
   const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imageType, setImageType] = useState('upload'); // 'upload' or 'url'
@@ -35,20 +44,18 @@ export function Admin() {
     return !url || url.includes('your-project-id') || url === '';
   }, []);
 
-  // Check and Fetch products when authenticated
+  // Fetch when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchProducts();
+      fetchOrders();
     }
   }, [isAuthenticated]);
 
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
-      if (isDemoMode) {
-        throw new Error('Supabase is not configured (Demo Mode)');
-      }
-
+      if (isDemoMode) throw new Error('Supabase is not configured');
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -57,8 +64,7 @@ export function Admin() {
       if (error) throw error;
       setProducts(data || []);
     } catch (err) {
-      console.warn('Using local mock products fallback in Admin:', err.message);
-      // Fallback: convert mock products keys if they match database column structure (our mock products already match)
+      console.warn('Fallback to local mock products in Admin:', err.message);
       setProducts(mockProducts.map(p => ({
         id: p.id,
         name_ar: p.name.ar,
@@ -68,10 +74,46 @@ export function Admin() {
         price: p.price,
         rating: p.rating,
         category: p.category,
-        image: p.image
+        image: p.image,
+        is_featured: p.is_featured
       })));
     } finally {
       setLoadingProducts(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    setLoadingOrders(true);
+    try {
+      if (isDemoMode) throw new Error('Supabase is not configured');
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (err) {
+      console.warn('Could not fetch orders:', err.message);
+      setOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      if (isDemoMode) throw new Error('Cannot update order status in Demo Mode');
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) throw error;
+      addToast(lang === 'ar' ? 'تم تحديث حالة الطلب!' : 'Statut de commande mis à jour!', 'success');
+      fetchOrders();
+    } catch (err) {
+      addToast(err.message, 'error');
     }
   };
 
@@ -82,14 +124,16 @@ export function Admin() {
       setIsAuthenticated(true);
       localStorage.setItem('admin_authenticated', 'true');
       setLoginError('');
+      addToast(lang === 'ar' ? 'مرحباً بك في لوحة التحكم!' : 'Bienvenue dans le panneau administration!', 'success');
     } else {
-      setLoginError(lang === 'ar' ? 'كلمة المرور غير صحيحة!' : 'Mot de passe incorrect!');
+      setLoginError(t('wrongPassword'));
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('admin_authenticated');
+    addToast(lang === 'ar' ? 'تم تسجيل الخروج بنجاح!' : 'Déconnexion réussie!', 'success');
   };
 
   const handleImageUpload = async (e) => {
@@ -97,11 +141,7 @@ export function Admin() {
     if (!file) return;
 
     if (isDemoMode) {
-      setImageError(
-        lang === 'ar' 
-          ? '⚠️ لا يمكن رفع ملفات الصور في وضع التجربة. يرجى تفعيل Supabase في ملف .env أولاً. يمكنك إدخال رابط صورة خارجي بدلاً من ذلك.' 
-          : '⚠️ L\'upload d\'images est désactivé en Mode Démo. Veuillez configurer Supabase dans le fichier .env. Vous pouvez utiliser un lien URL externe.'
-      );
+      setImageError(lang === 'ar' ? '⚠️ رفع الصور غير متوفر في وضع التجربة.' : '⚠️ Upload désactivé en Mode Démo.');
       return;
     }
 
@@ -114,10 +154,7 @@ export function Admin() {
 
       const { error: uploadError } = await supabase.storage
         .from('product-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
       if (uploadError) throw uploadError;
 
@@ -126,14 +163,10 @@ export function Admin() {
         .getPublicUrl(filePath);
 
       setFormData(prev => ({ ...prev, image: publicUrl }));
-      setMessage(lang === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Image téléchargée avec succès!');
+      addToast(lang === 'ar' ? 'تم رفع الصورة بنجاح!' : 'Image uploadée avec succès!', 'success');
     } catch (err) {
       console.error(err);
-      setImageError(
-        lang === 'ar' 
-          ? 'فشل رفع الصورة. يرجى التأكد من إنشاء Bucket باسم "product-images" وجعله Public في Supabase.' 
-          : 'Échec du chargement de l\'image. Assurez-vous d\'avoir créé un bucket "product-images" et de l\'avoir rendu Public sur Supabase.'
-      );
+      setImageError(lang === 'ar' ? 'فشل رفع الصورة. يرجى تهيئة Bucket في Supabase.' : 'Échec du chargement.');
     } finally {
       setUploading(false);
     }
@@ -144,18 +177,13 @@ export function Admin() {
     setMessage('');
 
     if (isDemoMode) {
-      setMessage(
-        lang === 'ar'
-          ? '⚠️ عذراً، لا يمكن إضافة أو تعديل المنتجات في وضع التجربة. لتمكين هذه الميزات، يرجى ربط قاعدة بيانات Supabase الخاصة بك عن طريق تهيئة ملف .env في المجلد الرئيسي للمشروع.'
-          : '⚠️ Désolé, l\'ajout ou la modification de produits est désactivée en Mode Démo. Veuillez connecter votre base de données Supabase dans le fichier .env.'
-      );
+      addToast(lang === 'ar' ? '⚠️ التعديل غير متاح في وضع التجربة' : '⚠️ Modification désactivée en mode Démo', 'error');
       return;
     }
 
     setSubmitting(true);
     try {
       if (isEditing) {
-        // Update product
         const { error } = await supabase
           .from('products')
           .update({
@@ -165,16 +193,16 @@ export function Admin() {
             description_fr: formData.description_fr,
             price: Number(formData.price),
             category: formData.category,
-            image: formData.image
+            image: formData.image,
+            is_featured: formData.is_featured
           })
           .eq('id', editProductId);
 
         if (error) throw error;
-        setMessage(lang === 'ar' ? 'تم تحديث المنتج بنجاح!' : 'Produit mis à jour avec succès!');
+        addToast(lang === 'ar' ? 'تم تحديث المنتج بنجاح!' : 'Produit mis à jour!', 'success');
         setIsEditing(false);
         setEditProductId(null);
       } else {
-        // Insert new product
         const { error } = await supabase
           .from('products')
           .insert([{
@@ -184,20 +212,21 @@ export function Admin() {
             description_fr: formData.description_fr,
             price: Number(formData.price),
             category: formData.category,
-            image: formData.image
+            image: formData.image,
+            is_featured: formData.is_featured
           }]);
 
         if (error) throw error;
-        setMessage(lang === 'ar' ? 'تم إضافة المنتج بنجاح!' : 'Produit ajouté avec succès!');
+        addToast(lang === 'ar' ? 'تم إضافة المنتج بنجاح!' : 'Produit ajouté!', 'success');
       }
 
       setFormData({ 
         name_ar: '', name_fr: '', description_ar: '', description_fr: '', 
-        price: '', category: 'kitchen', image: '' 
+        price: '', category: 'kitchen', image: '', is_featured: false 
       });
       fetchProducts();
     } catch (err) {
-      setMessage('خطأ / Erreur: ' + err.message);
+      addToast(err.message, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -213,328 +242,287 @@ export function Admin() {
       description_fr: p.description_fr,
       price: p.price,
       category: p.category,
-      image: p.image
+      image: p.image,
+      is_featured: p.is_featured || false
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id) => {
-    const confirmMsg = lang === 'ar' 
-      ? 'هل أنت متأكد من رغبتك في حذف هذا المنتج نهائياً؟' 
-      : 'Êtes-vous sûr de vouloir supprimer ce produit définitivement ?';
-      
-    if (window.confirm(confirmMsg)) {
+    if (window.confirm(t('deleteConfirm'))) {
       if (isDemoMode) {
-        setMessage(
-          lang === 'ar'
-            ? '⚠️ لا يمكن حذف المنتجات التجريبية في وضع التجربة. يرجى ربط قاعدة بيانات Supabase للتحكم الكامل.'
-            : '⚠️ Impossible de supprimer les produits de démonstration en Mode Démo. Veuillez connecter Supabase.'
-        );
+        addToast(lang === 'ar' ? 'لا يمكن الحذف في وضع التجربة' : 'Impossible de supprimer en Mode Démo', 'error');
         return;
       }
       try {
-        const { error } = await supabase
-          .from('products')
-          .delete()
-          .eq('id', id);
-
+        const { error } = await supabase.from('products').delete().eq('id', id);
         if (error) throw error;
-        setMessage(lang === 'ar' ? 'تم حذف المنتج بنجاح!' : 'Produit supprimé avec succès!');
-        
-        // If we were editing the deleted product, reset editing mode
-        if (isEditing && editProductId === id) {
-          setIsEditing(false);
-          setEditProductId(null);
-          setFormData({ 
-            name_ar: '', name_fr: '', description_ar: '', description_fr: '', 
-            price: '', category: 'kitchen', image: '' 
-          });
-        }
-        
+        addToast(lang === 'ar' ? 'تم حذف المنتج!' : 'Produit supprimé!', 'success');
         fetchProducts();
       } catch (err) {
-        setMessage('خطأ أثناء الحذف / Erreur: ' + err.message);
+        addToast(err.message, 'error');
       }
     }
   };
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditProductId(null);
-    setFormData({ 
-      name_ar: '', name_fr: '', description_ar: '', description_fr: '', 
-      price: '', category: 'kitchen', image: '' 
-    });
-  };
+  const pendingOrdersCount = useMemo(() => {
+    return orders.filter(o => o.status === 'pending').length;
+  }, [orders]);
 
   if (!isAuthenticated) {
     return (
-      <div className="admin-page animate-fade-in" style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="admin-container" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem 2rem', borderRadius: '16px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border-color)' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: '700', color: 'var(--text-main)' }}>
-            {lang === 'ar' ? 'الدخول للوحة التحكم' : 'Accès Administration'}
-          </h2>
-          {loginError && <div className="alert" style={{ backgroundColor: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'center' }}>{loginError}</div>}
-          <form onSubmit={handleLogin} className="admin-form" style={{ marginTop: 0 }}>
-            <div className="form-group">
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{lang === 'ar' ? 'كلمة المرور' : 'Mot de passe'}</label>
-              <input 
-                required 
-                type="password" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.5rem', outline: 'none' }}
-              />
-            </div>
-            <button type="submit" className="submit-btn" style={{ width: '100%', padding: '0.9rem', marginTop: '1.5rem', background: '#111', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: 'var(--transition)' }}>
+      <div className="admin-login-wrap">
+        <div className="admin-login-card animate-fade-in">
+          <h2>{t('adminLogin')}</h2>
+          {loginError && <div className="alert error" style={{ margin: '1rem 0' }}>{loginError}</div>}
+          <form onSubmit={handleLogin} className="checkout-form" style={{ marginTop: '1.5rem' }}>
+            <input 
+              required 
+              type="password" 
+              placeholder={t('adminPassword')}
+              value={password} 
+              onChange={e => setPassword(e.target.value)} 
+            />
+            <button type="submit" className="submit-btn" style={{ width: '100%' }}>
               {lang === 'ar' ? 'دخول' : 'Connexion'}
             </button>
           </form>
+          <button onClick={() => navigate('/')} className="back-btn" style={{ marginTop: '1.5rem', display: 'inline-flex' }}>
+            {t('backToStore')}
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="admin-page animate-fade-in">
-      <div className="admin-container" style={{ maxWidth: '1200px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem' }}>
+    <div className={`admin-page animate-fade-in ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
+      <div className="admin-container">
+        <div className="admin-header">
           <div>
-            <h1 style={{ fontSize: '1.8rem', fontWeight: '700' }}>لوحة التحكم / Panneau d'administration</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.3rem' }}>
-              {lang === 'ar' ? 'إدارة المنتجات، الإضافة، التعديل والحذف' : 'Gérer les produits, ajouter, modifier et supprimer'}
+            <h1 style={{ fontSize: '1.8rem', fontWeight: '800' }}>لوحة إدارة المتجر / Administration</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.2rem' }}>
+              {t('tagline')}
             </p>
           </div>
-          <button onClick={handleLogout} className="submit-btn" style={{ background: '#ef4444', padding: '0.6rem 1.2rem', width: 'auto', margin: 0, borderRadius: '50px', fontSize: '0.9rem' }}>
-            {lang === 'ar' ? 'تسجيل الخروج' : 'Déconnexion'}
+          <button onClick={handleLogout} className="btn-outline" style={{ color: 'var(--primary)', borderColor: 'var(--primary)', padding: '0.5rem 1.2rem', fontSize: '0.88rem' }}>
+            <LogOut size={16} />
+            <span>{t('adminLogout')}</span>
           </button>
         </div>
 
         {isDemoMode && (
-          <div className="alert animate-fade-in" style={{
-            background: 'linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%)',
-            color: '#856404',
-            border: '1px solid #ffeeba',
-            padding: '1rem 1.5rem',
-            borderRadius: '12px',
-            marginBottom: '2rem',
-            lineHeight: '1.6'
-          }}>
-            <strong>{lang === 'ar' ? '⚠️ وضع التجربة نشط' : '⚠️ Mode Démo Actif'}</strong>
-            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+          <div className="alert" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', marginBottom: '2rem' }}>
+            <strong>⚠️ {lang === 'ar' ? 'وضع التجربة نشط' : 'Mode Démo Actif'}</strong>
+            <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
               {lang === 'ar' 
-                ? 'لوحة التحكم تعمل حالياً ببيانات تجريبية محلية لأن التطبيق غير متصل بقاعدة بيانات Supabase. عمليات الإضافة، التعديل، والحذف غير مفعلة للحفاظ على سلامة البيانات المحلية. لتفعيل لوحة التحكم بالكامل، يرجى ملء مفاتيح Supabase الخاصة بك في ملف .env الموجود في جذر المشروع ثم إعادة تشغيل خادم التطوير.'
-                : 'Le panneau d\'administration fonctionne actuellement avec des données de démonstration locales car l\'application n\'est pas connectée à Supabase. L\'ajout, la modification et la suppression sont désactivés. Pour activer le panneau, veuillez renseigner vos clés Supabase dans le fichier .env.'}
+                ? 'التطبيق غير متصل بـ Supabase. لوحة التحكم تعرض المنتجات المحلية والعمليات غير مفعلة.'
+                : 'L\'application n\'est pas connectée à Supabase. Le mode démo est actif.'}
             </p>
           </div>
         )}
 
-        {message && <div className="alert animate-fade-in" style={{ marginBottom: '2rem' }}>{message}</div>}
+        <div className="admin-tabs">
+          <button 
+            className={`admin-tab ${activeTab === 'orders' ? 'active' : ''}`}
+            onClick={() => setActiveTab('orders')}
+          >
+            <ShoppingBag size={16} style={{ marginInlineEnd: '0.4rem', verticalAlign: 'middle' }} />
+            {t('ordersTab')} ({orders.length})
+          </button>
+          <button 
+            className={`admin-tab ${activeTab === 'products' ? 'active' : ''}`}
+            onClick={() => setActiveTab('products')}
+          >
+            <Package size={16} style={{ marginInlineEnd: '0.4rem', verticalAlign: 'middle' }} />
+            {t('productsTab')} ({products.length})
+          </button>
+        </div>
 
-        <div className="admin-grid">
-          {/* Form Side */}
-          <div className="admin-form-section">
-            <h3 style={{ fontSize: '1.3rem', fontWeight: '600', marginBottom: '1.5rem', color: 'var(--text-main)' }}>
-              {isEditing 
-                ? (lang === 'ar' ? '📝 تعديل المنتج الحالي' : '📝 Modifier le produit')
-                : (lang === 'ar' ? '➕ إضافة منتج جديد' : '➕ Ajouter un nouveau produit')
-              }
-            </h3>
-            
-            <form onSubmit={handleSubmit} className="admin-form" style={{ marginTop: 0, padding: '1.5rem', background: '#fcfcfc', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
-              <div className="form-group">
-                <label>اسم المنتج (عربي)</label>
-                <input required type="text" placeholder="مثال: طقم طناجر فاخر" value={formData.name_ar} onChange={e => setFormData({...formData, name_ar: e.target.value})} />
-              </div>
-              
-              <div className="form-group">
-                <label>Nom du produit (Français)</label>
-                <input required type="text" placeholder="Ex: Batterie de cuisine Luxe" value={formData.name_fr} onChange={e => setFormData({...formData, name_fr: e.target.value})} />
-              </div>
-              
-              <div className="form-group">
-                <label>الوصف (عربي)</label>
-                <textarea required rows="3" placeholder="اكتب وصفاً جذاباً للمنتج..." value={formData.description_ar} onChange={e => setFormData({...formData, description_ar: e.target.value})} />
-              </div>
-              
-              <div className="form-group">
-                <label>Description (Français)</label>
-                <textarea required rows="3" placeholder="Description attrayante..." value={formData.description_fr} onChange={e => setFormData({...formData, description_fr: e.target.value})} />
-              </div>
-              
-              <div className="form-group">
-                <label>السعر / Prix (MAD)</label>
-                <input required type="number" placeholder="0.00" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
-              </div>
-              
-              <div className="form-group">
-                <label>القسم / Catégorie</label>
-                <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                  <option value="kitchen">أواني / Ustensiles</option>
-                  <option value="decor">ديكورات / Décoration</option>
-                  <option value="appliances">أجهزة / Électroménager</option>
-                </select>
-              </div>
-
-              {/* Image Input Options */}
-              <div className="form-group" style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>صورة المنتج / Image</span>
-                  <div className="image-tabs" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button 
-                      type="button" 
-                      onClick={() => setImageType('upload')}
-                      className={`tab-btn ${imageType === 'upload' ? 'active' : ''}`}
-                      style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid #ddd', background: imageType === 'upload' ? '#111' : '#fff', color: imageType === 'upload' ? '#fff' : '#333', cursor: 'pointer' }}
-                    >
-                      {lang === 'ar' ? 'رفع ملف' : 'Uploader file'}
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setImageType('url')}
-                      className={`tab-btn ${imageType === 'url' ? 'active' : ''}`}
-                      style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid #ddd', background: imageType === 'url' ? '#111' : '#fff', color: imageType === 'url' ? '#fff' : '#333', cursor: 'pointer' }}
-                    >
-                      {lang === 'ar' ? 'رابط خارجي' : 'Lien URL'}
-                    </button>
-                  </div>
-                </label>
-
-                {imageType === 'upload' ? (
-                  <div className="upload-container" style={{ marginTop: '0.5rem' }}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageUpload}
-                      style={{ display: 'none' }}
-                      id="image-file-input"
-                    />
-                    <label 
-                      htmlFor="image-file-input"
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', border: '2px dashed var(--primary-color)', borderRadius: '8px', background: '#fdfbf7', cursor: 'pointer', textAlign: 'center', transition: 'var(--transition)' }}
-                    >
-                      <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📷</span>
-                      <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>
-                        {uploading 
-                          ? (lang === 'ar' ? 'جاري الرفع...' : 'Téléchargement...') 
-                          : (lang === 'ar' ? 'اضغط لاختيار صورة من جهازك' : 'Cliquez pour choisir une image')
-                        }
-                      </span>
-                    </label>
-                    {imageError && <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem', lineHeight: '1.4' }}>{imageError}</div>}
-                  </div>
-                ) : (
-                  <input 
-                    type="url" 
-                    placeholder="https://example.com/image.jpg" 
-                    value={formData.image} 
-                    onChange={e => setFormData({...formData, image: e.target.value})} 
-                    style={{ marginTop: '0.5rem' }}
-                  />
-                )}
-
-                {formData.image && (
-                  <div className="image-preview" style={{ marginTop: '1rem', position: 'relative', display: 'inline-block' }}>
-                    <img 
-                      src={formData.image} 
-                      alt="Preview" 
-                      style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }} 
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => setFormData({...formData, image: ''})}
-                      style={{ position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', cursor: 'pointer' }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button type="submit" disabled={submitting || uploading} className="submit-btn" style={{ flex: 1 }}>
-                  {submitting 
-                    ? (lang === 'ar' ? 'جاري الحفظ...' : 'Enregistrement...') 
-                    : isEditing 
-                      ? (lang === 'ar' ? 'حفظ التعديلات' : 'Enregistrer')
-                      : (lang === 'ar' ? 'إضافة المنتج' : 'Ajouter')
-                  }
-                </button>
-                {isEditing && (
-                  <button 
-                    type="button" 
-                    onClick={handleCancelEdit} 
-                    className="submit-btn" 
-                    style={{ background: '#666', flex: 0.5 }}
-                  >
-                    {lang === 'ar' ? 'إلغاء' : 'Annuler'}
-                  </button>
-                )}
-              </div>
-            </form>
+        <div className="admin-stats">
+          <div className="admin-stat-card">
+            <span className="admin-stat-num">{products.length}</span>
+            <span className="admin-stat-label">{t('productsTab')}</span>
           </div>
+          <div className="admin-stat-card">
+            <span className="admin-stat-num">{orders.length}</span>
+            <span className="admin-stat-label">{t('totalOrders')}</span>
+          </div>
+          <div className="admin-stat-card">
+            <span className="admin-stat-num">{pendingOrdersCount}</span>
+            <span className="admin-stat-label">{t('pendingOrders')}</span>
+          </div>
+        </div>
 
-          {/* List Side */}
-          <div className="admin-list-section">
-            <h3 style={{ fontSize: '1.3rem', fontWeight: '600', marginBottom: '1.5rem', color: 'var(--text-main)' }}>
-              📦 {lang === 'ar' ? `المنتجات الحالية (${products.length})` : `Produits existants (${products.length})`}
-            </h3>
-
-            {loadingProducts ? (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                {lang === 'ar' ? 'جاري تحميل المنتجات...' : 'Chargement des produits...'}
-              </div>
-            ) : products.length > 0 ? (
-              <div className="admin-products-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '700px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                {products.map(p => (
-                  <div key={p.id} className="admin-product-item" style={{ display: 'flex', gap: '1rem', background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)', transition: 'var(--transition)' }}>
-                    <img 
-                      src={p.image} 
-                      alt={p.name_ar} 
-                      style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '8px', background: '#f5f5f5' }}
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=100'; }}
-                    />
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                      <div>
-                        <h4 style={{ fontSize: '0.95rem', fontWeight: '600', margin: 0 }}>
-                          {lang === 'ar' ? p.name_ar : p.name_fr}
-                        </h4>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.2rem', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', background: '#f0f0f0', padding: '0.1rem 0.4rem', borderRadius: '4px', color: 'var(--text-muted)' }}>
-                            {p.category === 'kitchen' ? (lang === 'ar' ? 'أواني' : 'Ustensiles') : p.category === 'decor' ? (lang === 'ar' ? 'ديكور' : 'Décor') : (lang === 'ar' ? 'أجهزة' : 'Électro')}
-                          </span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary-color)' }}>
-                            {p.price} MAD
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
-                        <button 
-                          onClick={() => handleEdit(p)} 
-                          style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', padding: 0 }}
-                        >
-                          {lang === 'ar' ? '✏️ تعديل' : '✏️ Modifier'}
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(p.id)} 
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', padding: 0 }}
-                        >
-                          {lang === 'ar' ? '🗑️ حذف' : '🗑️ Supprimer'}
-                        </button>
-                      </div>
+        {activeTab === 'orders' ? (
+          <div className="orders-list">
+            {loadingOrders ? (
+              <div className="loading"><div className="spinner"></div></div>
+            ) : orders.length > 0 ? (
+              orders.map(order => (
+                <div key={order.id} className="order-card">
+                  <div className="order-card-header">
+                    <div>
+                      <span className="order-id">#{order.id}</span>
+                      <h4 className="order-customer" style={{ marginTop: '0.2rem' }}>{order.customer_name}</h4>
+                      <p className="order-meta">{order.customer_phone} | {order.customer_address}</p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                      <span className={`order-status-badge status-${order.status}`}>
+                        {t(`orderStatus_${order.status}`)}
+                      </span>
+                      <select 
+                        value={order.status} 
+                        onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                        className="status-select"
+                        disabled={isDemoMode}
+                      >
+                        <option value="pending">⏳ En attente</option>
+                        <option value="confirmed">✅ Confirmé</option>
+                        <option value="processing">🔄 En traitement</option>
+                        <option value="delivered">📦 Livré</option>
+                        <option value="cancelled">❌ Annulé</option>
+                      </select>
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  <div className="order-items-preview">
+                    {order.items.map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '0.25rem 0' }}>
+                        <span>• {item.name[lang]} (x{item.quantity})</span>
+                        <span>{item.price * item.quantity} MAD</span>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: '1px dashed var(--border)', marginTop: '0.5rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: '800' }}>
+                      <span>{t('cartTotal')}:</span>
+                      <span className="order-total">{order.total} MAD</span>
+                    </div>
+                  </div>
+                </div>
+              ))
             ) : (
-              <div style={{ textAlign: 'center', padding: '3rem', border: '1px dashed var(--border-color)', borderRadius: '12px', color: 'var(--text-muted)' }}>
-                {lang === 'ar' ? 'لا يوجد أي منتجات حالياً.' : 'Aucun produit disponible.'}
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                لا توجد طلبات حالياً / Aucune commande
               </div>
             )}
           </div>
-        </div>
+        ) : (
+          <div className="admin-grid">
+            <div className="admin-form-section">
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '1rem' }}>
+                {isEditing ? t('editProduct') : t('addProduct')}
+              </h3>
+              
+              <form onSubmit={handleSubmit} className="admin-form">
+                <div className="form-group">
+                  <label>اسم المنتج بالعربية / Nom (Arabe)</label>
+                  <input required type="text" value={formData.name_ar} onChange={e => setFormData({...formData, name_ar: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Nom en Français</label>
+                  <input required type="text" value={formData.name_fr} onChange={e => setFormData({...formData, name_fr: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>الوصف بالعربية / Description (Arabe)</label>
+                  <textarea required rows={3} value={formData.description_ar} onChange={e => setFormData({...formData, description_ar: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Description en Français</label>
+                  <textarea required rows={3} value={formData.description_fr} onChange={e => setFormData({...formData, description_fr: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>السعر / Prix (MAD)</label>
+                  <input required type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>القسم / Catégorie</label>
+                  <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                    <option value="kitchen">🍲 أواني / Ustensiles</option>
+                    <option value="appliances">⚡ أجهزة / Électroménager</option>
+                    <option value="decor">🏺 ديكور / Décoration</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'normal', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={formData.is_featured} 
+                      onChange={e => setFormData({...formData, is_featured: e.target.checked})} 
+                    />
+                    <span>منتج مميز (الأكثر مبيعاً) / Produit Vedette</span>
+                  </label>
+                </div>
+
+                <div className="form-group" style={{ borderTop: '1px dashed var(--border)', paddingTop: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label>صورة المنتج / Image</label>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button type="button" className={`tab-btn`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', border: '1px solid #ddd', background: imageType === 'upload' ? '#111' : '#fff', color: imageType === 'upload' ? '#fff' : '#333' }} onClick={() => setImageType('upload')}>Upload</button>
+                      <button type="button" className={`tab-btn`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', border: '1px solid #ddd', background: imageType === 'url' ? '#111' : '#fff', color: imageType === 'url' ? '#fff' : '#333' }} onClick={() => setImageType('url')}>URL</button>
+                    </div>
+                  </div>
+
+                  {imageType === 'upload' ? (
+                    <div className="upload-container">
+                      <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} id="admin-file-img" />
+                      <label htmlFor="admin-file-img">
+                        <span>📷</span>
+                        <span style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                          {uploading ? 'جاري الرفع...' : 'اضغط لاختيار صورة'}
+                        </span>
+                      </label>
+                      {imageError && <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '0.5rem' }}>{imageError}</div>}
+                    </div>
+                  ) : (
+                    <input type="url" placeholder="https://example.com/image.jpg" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} />
+                  )}
+
+                  {formData.image && (
+                    <img src={formData.image} alt="Preview" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', marginTop: '1rem', border: '1px solid var(--border)' }} />
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="submit" disabled={submitting || uploading} className="submit-btn" style={{ flex: 1 }}>
+                    {isEditing ? t('saveProduct') : t('addProductBtn')}
+                  </button>
+                  {isEditing && (
+                    <button type="button" onClick={() => { setIsEditing(false); setEditProductId(null); setFormData({ name_ar: '', name_fr: '', description_ar: '', description_fr: '', price: '', category: 'kitchen', image: '', is_featured: false }); }} className="submit-btn" style={{ background: '#666', flex: 0.4 }}>
+                      {t('cancelEdit')}
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="admin-list-section">
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '1rem' }}>{t('productsTab')} ({products.length})</h3>
+              
+              {loadingProducts ? (
+                <div className="loading"><div className="spinner"></div></div>
+              ) : (
+                <div className="admin-products-list">
+                  {products.map(p => (
+                    <div key={p.id} className="admin-product-item">
+                      <img src={p.image} alt={p.name_ar} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} />
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: '600' }}>{lang === 'ar' ? p.name_ar : p.name_fr}</h4>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary)' }}>{p.price} MAD</span>
+                        {p.is_featured && <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.3rem', background: 'orange', color: 'white', borderRadius: '4px', marginInlineStart: '0.5rem' }}>Featured</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button onClick={() => handleEdit(p)} className="remove-btn" style={{ color: 'blue' }}><Edit2 size={16} /></button>
+                        <button onClick={() => handleDelete(p.id)} className="remove-btn"><Trash2 size={16} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

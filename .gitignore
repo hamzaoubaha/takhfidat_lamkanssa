@@ -7,23 +7,42 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+server/node_modules
+
+# Build output
 dist
 dist-ssr
-*.local
 
-# Environment variables
+# Environment variables (IMPORTANT: never upload these)
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+
+# Local database (SQLite - not needed, using Supabase)
+server/database.sqlite
+*.sqlite
+*.db
+
+# Personal/Private files in public folder
+public/1.jpg
+public/ConvocationExam_*.pdf
+public/*.pdf
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+*.DS_Store
+desktop.ini
