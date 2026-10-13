@@ -21,9 +21,18 @@ export function HeroSection() {
           {t('heroDesc')}
         </p>
         <div className="hero-actions">
-          <a href="#store-products" className="btn-primary">
+          <button 
+            type="button" 
+            className="btn-primary"
+            onClick={() => {
+              const el = document.getElementById('store-products');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+          >
             {t('heroCTA')}
-          </a>
+          </button>
         </div>
         <div className="hero-stats">
           <div className="hero-stat">
